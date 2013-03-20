@@ -9,13 +9,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/streadway/amqp"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"io/ioutil"
+	"encoding/json"
+	"github.com/streadway/amqp"
 )
 
 var (

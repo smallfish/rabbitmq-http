@@ -20,7 +20,7 @@ Under active development, not production now.
 
 * Start HTTP Server:
 
-    $ ./rabbitmq-http -address="127.0.0.1:8080" -amqp="amqp://guest:guest@localhost:5672/"
+        $ ./rabbitmq-http -address="127.0.0.1:8080" -amqp="amqp://guest:guest@localhost:5672/"
 
 #### API
 
