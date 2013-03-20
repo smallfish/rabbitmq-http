@@ -4,7 +4,7 @@ REST API for RabbitMQ, but it's not [RabbitMQ Management Plugin](http://www.rabb
 
 #### Status:
 
-Under active development, not production now.
+Under active development.
 
 #### Required:
 
@@ -29,8 +29,12 @@ Under active development, not production now.
 * create new exchange:
         
         $ curl -i -X POST http://127.0.0.1:8080/exchange -d \
-         '{"name": "e1", "type": "topic", "durable": true, "auto_delete": false}'
+         '{"name": "e1", "type": "topic", "durable": true, "autodelete": false}'
         
+* delete exchange:
+
+        $ curl -X DELETE http://127.0.0.1:8080/exchange -d \
+         '{"name": "e1"}'
 
 #####Queue
 

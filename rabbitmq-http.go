@@ -9,13 +9,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/streadway/amqp"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"io/ioutil"
-	"encoding/json"
-	"github.com/streadway/amqp"
 )
 
 var (
@@ -73,6 +73,15 @@ func (r *RabbitMQ) Connect() (err error) {
 
 func (r *RabbitMQ) DeclareExchange(name, typ string, durable, autodelete, nowait bool) (err error) {
 	err = r.channel.ExchangeDeclare(name, typ, durable, autodelete, false, nowait, nil)
+	if err != nil {
+		// TODO: log error
+		return err
+	}
+	return nil
+}
+
+func (r *RabbitMQ) DeleteExchange(name string) (err error) {
+	err = r.channel.ExchangeDelete(name, false, false)
 	if err != nil {
 		// TODO: log error
 		return err
@@ -170,12 +179,12 @@ func QueueBindHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		rabbit.Close()
 	} else {
-	    fmt.Fprintf(w, "method %s not allow", r.Method)
-    }
+		fmt.Fprintf(w, "method %s not allow", r.Method)
+	}
 }
 
 func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
+	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			fmt.Fprintf(w, "read body error: %s", err)
@@ -185,16 +194,25 @@ func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal(body, entity)
 		rabbit := new(RabbitMQ)
 		rabbit.Connect()
-		err = rabbit.DeclareExchange(entity.Name, entity.Type, entity.Durable, entity.AutoDelete, entity.NoWait)
-		if err != nil {
-			fmt.Fprintf(w, "declare exchange error: %s", err)
-		} else {
-			fmt.Fprintf(w, "declare exchange ok")
+		if r.Method == "POST" {
+			err = rabbit.DeclareExchange(entity.Name, entity.Type, entity.Durable, entity.AutoDelete, entity.NoWait)
+			if err != nil {
+				fmt.Fprintf(w, "declare exchange error: %s", err)
+			} else {
+				fmt.Fprintf(w, "declare exchange ok")
+			}
+		} else if r.Method == "DELETE" {
+			err = rabbit.DeleteExchange(entity.Name)
+			if err != nil {
+				fmt.Fprintf(w, "delete exchange error: %s", err)
+			} else {
+				fmt.Fprintf(w, "delete exchange ok")
+			}
 		}
 		rabbit.Close()
 	} else {
-	    fmt.Fprintf(w, "method %s not allow", r.Method)
-    }
+		fmt.Fprintf(w, "method %s not allow", r.Method)
+	}
 }
 
 func main() {
