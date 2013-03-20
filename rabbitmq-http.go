@@ -108,10 +108,19 @@ func (r *RabbitMQ) DeleteQueue(name string) (err error) {
 	return nil
 }
 
-func (r *RabbitMQ) BindQueue(queue string, keys []string, exchange string, nowait bool) (err error) {
+func (r *RabbitMQ) BindQueue(queue, exchange string, keys []string, nowait bool) (err error) {
 	for _, key := range keys {
 		if err = r.channel.QueueBind(queue, key, exchange, nowait, nil); err != nil {
 			// TODO: log error
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *RabbitMQ) UnBindQueue(queue, exchange string, keys []string) (err error) {
+	for _, key := range keys {
+		if err = r.channel.QueueUnbind(queue, key, exchange, nil); err != nil {
 			return err
 		}
 	}
@@ -161,7 +170,7 @@ func QueueHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func QueueBindHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
+	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			fmt.Fprintf(w, "read body error: %s", err)
@@ -171,11 +180,20 @@ func QueueBindHandler(w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal(body, entity) // TODO: check error
 		rabbit := new(RabbitMQ)
 		rabbit.Connect()
-		err = rabbit.BindQueue(entity.Queue, entity.Keys, entity.Exchange, entity.NoWait)
-		if err != nil {
-			fmt.Fprintf(w, "bind queue error: %s", err)
-		} else {
-			fmt.Fprintf(w, "bind queue ok")
+		if r.Method == "POST" {
+			err = rabbit.BindQueue(entity.Queue, entity.Exchange, entity.Keys, entity.NoWait)
+			if err != nil {
+				fmt.Fprintf(w, "bind queue error: %s", err)
+			} else {
+				fmt.Fprintf(w, "bind queue ok")
+			}
+		} else if r.Method == "DELETE" {
+			err = rabbit.UnBindQueue(entity.Queue, entity.Exchange, entity.Keys)
+			if err != nil {
+				fmt.Fprintf(w, "unbind queue error: %s", err)
+			} else {
+				fmt.Fprintf(w, "unbind queue ok")
+			}
 		}
 		rabbit.Close()
 	} else {
