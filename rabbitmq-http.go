@@ -1,17 +1,10 @@
 // Copyright (C) 2013 Chen "smallfish" Xiaoyu (陈小玉)
 
-// TODO:
-//  * Logging error
-//  * Check unmarshal/connect error
-//  * Defer rabbit close
-//  * Format response, result as JSON
-
 package main
 
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"github.com/streadway/amqp"
 	"io/ioutil"
 	"log"
@@ -141,31 +134,38 @@ func QueueHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			fmt.Fprintf(w, "read body error: %s", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		entity := new(QueueEntity)
-		json.Unmarshal(body, entity) // TODO: check error
-		rabbit := new(RabbitMQ)
-		rabbit.Connect() // TODO: check error
-		if r.Method == "POST" {
-			err = rabbit.DeclareQueue(entity.Name, entity.Durable, entity.AutoDelete, entity.Exclusive, entity.NoWait)
-			if err != nil {
-				fmt.Fprintf(w, "declare queue error: %s", err)
-			} else {
-				fmt.Fprintf(w, "declare queue ok")
-			}
-		} else if r.Method == "DELETE" {
-			err = rabbit.DeleteQueue(entity.Name)
-			if err != nil {
-				fmt.Fprintf(w, "delete queue error: %s", err)
-			} else {
-				fmt.Fprintf(w, "delete queue ok")
-			}
+		if err = json.Unmarshal(body, entity); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		rabbit.Close()
+
+		rabbit := new(RabbitMQ)
+		if err = rabbit.Connect(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rabbit.Close()
+
+		if r.Method == "POST" {
+			if err = rabbit.DeclareQueue(entity.Name, entity.Durable, entity.AutoDelete, entity.Exclusive, entity.NoWait); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("declare queue ok"))
+		} else if r.Method == "DELETE" {
+			if err = rabbit.DeleteQueue(entity.Name); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("delete queue ok"))
+		}
 	} else {
-		fmt.Fprintf(w, "method %s not allow", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -173,31 +173,38 @@ func QueueBindHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			fmt.Fprintf(w, "read body error: %s", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		entity := new(QueueBindEntity)
-		json.Unmarshal(body, entity) // TODO: check error
-		rabbit := new(RabbitMQ)
-		rabbit.Connect()
-		if r.Method == "POST" {
-			err = rabbit.BindQueue(entity.Queue, entity.Exchange, entity.Keys, entity.NoWait)
-			if err != nil {
-				fmt.Fprintf(w, "bind queue error: %s", err)
-			} else {
-				fmt.Fprintf(w, "bind queue ok")
-			}
-		} else if r.Method == "DELETE" {
-			err = rabbit.UnBindQueue(entity.Queue, entity.Exchange, entity.Keys)
-			if err != nil {
-				fmt.Fprintf(w, "unbind queue error: %s", err)
-			} else {
-				fmt.Fprintf(w, "unbind queue ok")
-			}
+		if err = json.Unmarshal(body, entity); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		rabbit.Close()
+
+		rabbit := new(RabbitMQ)
+		if err = rabbit.Connect(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rabbit.Close()
+
+		if r.Method == "POST" {
+			if err = rabbit.BindQueue(entity.Queue, entity.Exchange, entity.Keys, entity.NoWait); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("bind queue ok"))
+		} else if r.Method == "DELETE" {
+			if err = rabbit.UnBindQueue(entity.Queue, entity.Exchange, entity.Keys); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("unbind queue ok"))
+		}
 	} else {
-		fmt.Fprintf(w, "method %s not allow", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -205,31 +212,38 @@ func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			fmt.Fprintf(w, "read body error: %s", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		entity := new(ExchangeEntity)
-		json.Unmarshal(body, entity)
-		rabbit := new(RabbitMQ)
-		rabbit.Connect()
-		if r.Method == "POST" {
-			err = rabbit.DeclareExchange(entity.Name, entity.Type, entity.Durable, entity.AutoDelete, entity.NoWait)
-			if err != nil {
-				fmt.Fprintf(w, "declare exchange error: %s", err)
-			} else {
-				fmt.Fprintf(w, "declare exchange ok")
-			}
-		} else if r.Method == "DELETE" {
-			err = rabbit.DeleteExchange(entity.Name)
-			if err != nil {
-				fmt.Fprintf(w, "delete exchange error: %s", err)
-			} else {
-				fmt.Fprintf(w, "delete exchange ok")
-			}
+		if err = json.Unmarshal(body, entity); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		rabbit.Close()
+
+		rabbit := new(RabbitMQ)
+		if err = rabbit.Connect(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rabbit.Close()
+
+		if r.Method == "POST" {
+			if err = rabbit.DeclareExchange(entity.Name, entity.Type, entity.Durable, entity.AutoDelete, entity.NoWait); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("declare exchange ok"))
+		} else if r.Method == "DELETE" {
+			if err = rabbit.DeleteExchange(entity.Name); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write([]byte("delete exchange ok"))
+		}
 	} else {
-		fmt.Fprintf(w, "method %s not allow", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
