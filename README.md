@@ -23,13 +23,13 @@ Under active development.
 
         $ ./rabbitmq-http -address="127.0.0.1:8080" -amqp="amqp://guest:guest@localhost:5672/"
 
-##### API
+##### HTTP Response
 
-###### Response:
+    200 OK
+    405 Method Not Allowed
+    500 Internal Server Error
 
-    HTTP/1.1 200 OK
-    HTTP/1.1 405 Method Not Allowed
-    HTTP/1.1 500 Internal Server Error
+##### API List
 
 ###### Exchange
 
