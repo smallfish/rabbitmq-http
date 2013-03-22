@@ -108,4 +108,16 @@ Under active development.
 
         unbind queue ok
 
+* consume queue:
+
+        $ curl -i -X GET "http://127.0.0.1:8080/queue?name=q1"
+
+        HTTP/1.1 200 OK
+        Date: Fri, 22 Mar 2013 04:11:59 GMT
+        Transfer-Encoding: chunked
+        Content-Type: text/plain; charset=utf-8
+
+        <DATA>\n
+        ...
+
 __END__

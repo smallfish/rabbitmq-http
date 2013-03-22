@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/streadway/amqp"
 	"io/ioutil"
 	"log"
@@ -48,6 +49,7 @@ type QueueBindEntity struct {
 type RabbitMQ struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
+	done    chan error
 }
 
 func (r *RabbitMQ) Connect() (err error) {
@@ -61,6 +63,7 @@ func (r *RabbitMQ) Connect() (err error) {
 		// TODO: log error
 		return err
 	}
+	r.done = make(chan error)
 	return nil
 }
 
@@ -120,6 +123,23 @@ func (r *RabbitMQ) UnBindQueue(queue, exchange string, keys []string) (err error
 	return nil
 }
 
+func (r *RabbitMQ) ConsumeQueue(queue string, message chan []byte) (err error) {
+	deliveries, err := r.channel.Consume(queue, "simple-consumer", true, false, false, false, nil)
+	if err != nil {
+		// TODO: log error
+		return err
+	}
+	go func(deliveries <-chan amqp.Delivery, done chan error, message chan []byte) {
+		for d := range deliveries {
+			b := d.Body
+			// log.Printf("got %dB delivery: [%v] %s", len(d.Body), d.DeliveryTag, b)
+			message <- b
+		}
+		done <- nil
+	}(deliveries, r.done, message)
+	return nil
+}
+
 func (r *RabbitMQ) Close() (err error) {
 	err = r.conn.Close()
 	if err != nil {
@@ -163,6 +183,26 @@ func QueueHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Write([]byte("delete queue ok"))
+		}
+	} else if r.Method == "GET" {
+		r.ParseForm()
+		w.Write([]byte(""))
+		w.(http.Flusher).Flush()
+		rabbit := new(RabbitMQ)
+		if err := rabbit.Connect(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rabbit.Close()
+		message := make(chan []byte)
+		for _, name := range r.Form["name"] {
+			go func() {
+				rabbit.ConsumeQueue(name, message)
+			}()
+		}
+		for {
+			fmt.Fprintf(w, "%s\n", <-message)
+			w.(http.Flusher).Flush()
 		}
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)
