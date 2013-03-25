@@ -21,7 +21,16 @@ func init() {
 	flag.Parse()
 }
 
-// Entity for HTTP Request Body: Exchange/Queue/QueueBind JSON Input
+// Entity for HTTP Request Body: Message/Exchange/Queue/QueueBind JSON Input
+
+type MessageEntity struct {
+	Exchange     string `json:"exchange"`
+	Key          string `json:"key"`
+	DeliveryMode uint8  `json:"deliverymode"`
+	Priority     uint8  `json:"priority"`
+	Body         string `json:"body"`
+}
+
 type ExchangeEntity struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
@@ -64,6 +73,23 @@ func (r *RabbitMQ) Connect() (err error) {
 		return err
 	}
 	r.done = make(chan error)
+	return nil
+}
+
+func (r *RabbitMQ) Publish(exchange, key string, deliverymode, priority uint8, body string) (err error) {
+	err = r.channel.Publish(exchange, key, false, false,
+		amqp.Publishing{
+			Headers:         amqp.Table{},
+			ContentType:     "text/plain",
+			ContentEncoding: "",
+			DeliveryMode:    deliverymode,
+			Priority:        priority,
+			Body:            []byte(body),
+		},
+	)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -124,12 +150,12 @@ func (r *RabbitMQ) UnBindQueue(queue, exchange string, keys []string) (err error
 }
 
 func (r *RabbitMQ) ConsumeQueue(queue string, message chan []byte) (err error) {
-	deliveries, err := r.channel.Consume(queue, "simple-consumer", true, false, false, false, nil)
+	deliveries, err := r.channel.Consume(queue, "", true, false, false, false, nil)
 	if err != nil {
 		// TODO: log error
 		return err
 	}
-	go func(deliveries <-chan amqp.Delivery, done chan error, message chan []byte) {
+	func(deliveries <-chan amqp.Delivery, done chan error, message chan []byte) {
 		for d := range deliveries {
 			b := d.Body
 			// log.Printf("got %dB delivery: [%v] %s", len(d.Body), d.DeliveryTag, b)
@@ -248,6 +274,36 @@ func QueueBindHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func PublishHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		entity := new(MessageEntity)
+		if err = json.Unmarshal(body, entity); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rabbit := new(RabbitMQ)
+		if err = rabbit.Connect(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rabbit.Close()
+
+		if err = rabbit.Publish(entity.Exchange, entity.Key, entity.DeliveryMode, entity.Priority, entity.Body); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte("publish message ok"))
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 func ExchangeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
@@ -292,6 +348,7 @@ func main() {
 	http.HandleFunc("/exchange", ExchangeHandler)
 	http.HandleFunc("/queue/bind", QueueBindHandler)
 	http.HandleFunc("/queue", QueueHandler)
+	http.HandleFunc("/publish", PublishHandler)
 
 	// Start HTTP Server
 	err := http.ListenAndServe(*address, nil)
