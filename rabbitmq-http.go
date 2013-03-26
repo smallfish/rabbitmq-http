@@ -22,7 +22,6 @@ func init() {
 }
 
 // Entity for HTTP Request Body: Message/Exchange/Queue/QueueBind JSON Input
-
 type MessageEntity struct {
 	Exchange     string `json:"exchange"`
 	Key          string `json:"key"`
@@ -175,7 +174,7 @@ func (r *RabbitMQ) Close() (err error) {
 	return nil
 }
 
-// QueueHandler
+// HTTP Handlers
 func QueueHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "DELETE" {
 		body, err := ioutil.ReadAll(r.Body)
