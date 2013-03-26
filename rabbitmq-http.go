@@ -64,12 +64,12 @@ type RabbitMQ struct {
 func (r *RabbitMQ) Connect() (err error) {
 	r.conn, err = amqp.Dial(*amqpUri)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] connect error: %s\n", err)
 		return err
 	}
 	r.channel, err = r.conn.Channel()
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] get channel error: %s\n", err)
 		return err
 	}
 	r.done = make(chan error)
@@ -88,6 +88,7 @@ func (r *RabbitMQ) Publish(exchange, key string, deliverymode, priority uint8, b
 		},
 	)
 	if err != nil {
+		log.Printf("[amqp] publish message error: %s\n", err)
 		return err
 	}
 	return nil
@@ -96,7 +97,7 @@ func (r *RabbitMQ) Publish(exchange, key string, deliverymode, priority uint8, b
 func (r *RabbitMQ) DeclareExchange(name, typ string, durable, autodelete, nowait bool) (err error) {
 	err = r.channel.ExchangeDeclare(name, typ, durable, autodelete, false, nowait, nil)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] declare exchange error: %s\n", err)
 		return err
 	}
 	return nil
@@ -105,7 +106,7 @@ func (r *RabbitMQ) DeclareExchange(name, typ string, durable, autodelete, nowait
 func (r *RabbitMQ) DeleteExchange(name string) (err error) {
 	err = r.channel.ExchangeDelete(name, false, false)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] delete exchange error: %s\n", err)
 		return err
 	}
 	return nil
@@ -114,7 +115,7 @@ func (r *RabbitMQ) DeleteExchange(name string) (err error) {
 func (r *RabbitMQ) DeclareQueue(name string, durable, autodelete, exclusive, nowait bool) (err error) {
 	_, err = r.channel.QueueDeclare(name, durable, autodelete, exclusive, nowait, nil)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] declare queue error: %s\n", err)
 		return err
 	}
 	return nil
@@ -124,7 +125,7 @@ func (r *RabbitMQ) DeleteQueue(name string) (err error) {
 	// TODO: other property wrapper
 	_, err = r.channel.QueueDelete(name, false, false, false)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] delete queue error: %s\n", err)
 		return err
 	}
 	return nil
@@ -133,7 +134,7 @@ func (r *RabbitMQ) DeleteQueue(name string) (err error) {
 func (r *RabbitMQ) BindQueue(queue, exchange string, keys []string, nowait bool) (err error) {
 	for _, key := range keys {
 		if err = r.channel.QueueBind(queue, key, exchange, nowait, nil); err != nil {
-			// TODO: log error
+			log.Printf("[amqp] bind queue error: %s\n", err)
 			return err
 		}
 	}
@@ -143,6 +144,7 @@ func (r *RabbitMQ) BindQueue(queue, exchange string, keys []string, nowait bool)
 func (r *RabbitMQ) UnBindQueue(queue, exchange string, keys []string) (err error) {
 	for _, key := range keys {
 		if err = r.channel.QueueUnbind(queue, key, exchange, nil); err != nil {
+			log.Printf("[amqp] unbind queue error: %s\n", err)
 			return err
 		}
 	}
@@ -152,14 +154,12 @@ func (r *RabbitMQ) UnBindQueue(queue, exchange string, keys []string) (err error
 func (r *RabbitMQ) ConsumeQueue(queue string, message chan []byte) (err error) {
 	deliveries, err := r.channel.Consume(queue, "", true, false, false, false, nil)
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] consume queue error: %s\n", err)
 		return err
 	}
-	func(deliveries <-chan amqp.Delivery, done chan error, message chan []byte) {
+	go func(deliveries <-chan amqp.Delivery, done chan error, message chan []byte) {
 		for d := range deliveries {
-			b := d.Body
-			// log.Printf("got %dB delivery: [%v] %s", len(d.Body), d.DeliveryTag, b)
-			message <- b
+			message <- d.Body
 		}
 		done <- nil
 	}(deliveries, r.done, message)
@@ -169,7 +169,7 @@ func (r *RabbitMQ) ConsumeQueue(queue string, message chan []byte) (err error) {
 func (r *RabbitMQ) Close() (err error) {
 	err = r.conn.Close()
 	if err != nil {
-		// TODO: log error
+		log.Printf("[amqp] close error: %s\n", err)
 		return err
 	}
 	return nil
@@ -212,20 +212,26 @@ func QueueHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == "GET" {
 		r.ParseForm()
-		w.Write([]byte(""))
-		w.(http.Flusher).Flush()
+
 		rabbit := new(RabbitMQ)
 		if err := rabbit.Connect(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer rabbit.Close()
+
 		message := make(chan []byte)
+
 		for _, name := range r.Form["name"] {
-			go func() {
-				rabbit.ConsumeQueue(name, message)
-			}()
+			if err := rabbit.ConsumeQueue(name, message); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
+
+		w.Write([]byte(""))
+		w.(http.Flusher).Flush()
+
 		for {
 			fmt.Fprintf(w, "%s\n", <-message)
 			w.(http.Flusher).Flush()
@@ -281,6 +287,7 @@ func PublishHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		entity := new(MessageEntity)
 		if err = json.Unmarshal(body, entity); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -351,6 +358,7 @@ func main() {
 	http.HandleFunc("/publish", PublishHandler)
 
 	// Start HTTP Server
+	log.Printf("server run %s (listen %s)\n", *address, *amqpUri)
 	err := http.ListenAndServe(*address, nil)
 	if err != nil {
 		log.Fatal(err)

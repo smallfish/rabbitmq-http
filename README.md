@@ -124,7 +124,7 @@ Under active development.
 
 * consume queue:
 
-        $ curl -i -X GET "http://127.0.0.1:8080/queue?name=q1"
+        $ curl -i -X GET "http://127.0.0.1:8080/queue?name=q1" # more queues: "/queue?name=q1&name&q2"
 
         HTTP/1.1 200 OK
         Date: Fri, 22 Mar 2013 04:11:59 GMT
