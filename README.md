@@ -19,9 +19,9 @@ Under active development.
 
 ##### Usage
 
-* Start HTTP Server:
+* Start HTTP Server (see your $GOPATH/bin):
 
-        $ ./rabbitmq-http -address="127.0.0.1:8080" -amqp="amqp://guest:guest@localhost:5672/"
+        # $GOPATH/bin/rabbitmq-http -address="127.0.0.1:8080" -amqp="amqp://guest:guest@localhost:5672/"
 
 ##### HTTP Response
 
